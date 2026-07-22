@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TV Kingdom - Ultra Fast Live Stream</title>
+  
+  <!-- HLS.js for optimized adaptive live streaming -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  
+  <style>
+    :root {
+      --bg-dark: #0a0d14;
+      --bg-sidebar: #121722;
+      --card-bg: rgba(255, 255, 255, 0.04);
+      --card-hover: rgba(255, 255, 255, 0.09);
+      --accent-gradient: linear-gradient(135deg, #ff9933 0%, #ff5500 100%);
+      --accent-color: #ff9933;
+      --text-primary: #ffffff;
+      --text-secondary: #94a3b8;
+      --border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-dark); color: var(--text-primary); height: 100vh; display: flex; overflow: hidden; }
+
+    /* Modern Sidebar */
+    #sidebar { width: 380px; background: var(--bg-sidebar); display: flex; flex-direction: column; border-right: 1px solid var(--border-color); }
+    .sidebar-header { padding: 20px 16px 12px 16px; background: rgba(0,0,0,0.2); }
+    .brand { font-size: 1.3rem; font-weight: 800; color: var(--text-primary); display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+    .brand span { background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+    /* Search Bar */
+    .search-box { position: relative; margin-bottom: 12px; }
+    .search-box input { width: 100%; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--border-color); background: rgba(0, 0, 0, 0.3); color: #fff; outline: none; font-size: 0.88rem; transition: all 0.2s; }
+    .search-box input:focus { border-color: var(--accent-color); box-shadow: 0 0 12px rgba(255, 153, 51, 0.2); }
+
+    /* Horizontal Pill Tabs for Categories */
+    .category-pills { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 4px; scrollbar-width: none; }
+    .category-pills::-webkit-scrollbar { display: none; }
+    .pill { padding: 7px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: 600; white-space: nowrap; background: rgba(255, 255, 255, 0.06); color: var(--text-secondary); cursor: pointer; border: 1px solid transparent; transition: all 0.2s; }
+    .pill:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+    .pill.active { background: var(--accent-gradient); color: #fff; box-shadow: 0 4px 12px rgba(255, 85, 0, 0.3); }
+
+    /* Channel Cards Grid */
+    #channel-list { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+    #channel-list::-webkit-scrollbar { width: 5px; }
+    #channel-list::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 10px; }
+
+    .channel-card { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: 14px; cursor: pointer; background: var(--card-bg); border: 1px solid var(--border-color); transition: all 0.2s ease; }
+    .channel-card:hover { background: var(--card-hover); transform: translateX(3px); }
+    .channel-card.active { background: rgba(255, 153, 51, 0.12); border-color: var(--accent-color); }
+    .channel-logo { width: 44px; height: 44px; object-fit: contain; border-radius: 10px; background: #000; padding: 4px; flex-shrink: 0; }
+    .channel-meta { overflow: hidden; }
+    .channel-name { font-size: 0.92rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .channel-tag { font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px; }
+
+    /* Main Video Stage */
+    #player-stage { flex: 1; display: flex; flex-direction: column; background: #000; justify-content: center; align-items: center; position: relative; }
+    video { width: 100%; height: 100%; object-fit: contain; }
+
+    /* Overlay Bar */
+    .video-overlay { position: absolute; top: 20px; left: 20px; right: 20px; display: flex; justify-content: space-between; align-items: center; pointer-events: none; z-index: 10; }
+    .badge { background: rgba(10, 13, 20, 0.8); backdrop-filter: blur(12px); padding: 8px 16px; border-radius: 30px; font-size: 0.82rem; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 8px; }
+    .dot-live { width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981; }
+    
+    .quality-control { pointer-events: auto; }
+    .quality-control select { padding: 6px 14px; font-size: 0.8rem; background: rgba(10, 13, 20, 0.8); backdrop-filter: blur(12px); color: #fff; border-radius: 20px; border: 1px solid var(--border-color); outline: none; cursor: pointer; }
+  </style>
+</head>
+<body>
+
+  <div id="sidebar">
+    <div class="sidebar-header">
+      <div class="brand">👑 <span>TV Kingdom</span></div>
+      <div class="search-box">
+        <input type="text" id="search-input" placeholder="Search live channels..." oninput="filterChannels()" />
+      </div>
+      <div class="category-pills" id="pills-container">
+        <!-- Dynamic Category Pills -->
+      </div>
+    </div>
+    <div id="channel-list">Loading streams...</div>
+  </div>
+
+  <div id="player-stage">
+    <div class="video-overlay">
+      <div id="status" class="badge"><span class="dot-live"></span> Ready</div>
+      <div class="quality-control">
+        <select id="quality-select" onchange="changeQuality(this.value)" style="display:none;">
+          <option value="-1">Auto (Speed Adaptive)</option>
+        </select>
+      </div>
+    </div>
+    <video id="video-player" controls autoplay></video>
+  </div>
+
+  <script>
+    const PLAYLIST_URL = 'https://iptv-org.github.io/iptv/countries/in.m3u';
+
+    let channels = [];
+    let selectedCategory = 'All';
+    const video = document.getElementById('video-player');
+    const statusEl = document.getElementById('status');
+    const qualitySelect = document.getElementById('quality-select');
+    let hls = null;
+
+    async function loadPlaylist() {
+      try {
+        const response = await fetch(PLAYLIST_URL);
+        const text = await response.text();
+        channels = parseM3U(text);
+        
+        renderCategoryPills();
+        filterChannels();
+      } catch (err) {
+        document.getElementById('channel-list').innerHTML = '<div style="padding:20px; color:#ef4444;">Failed to load channels. Check network.</div>';
+      }
+    }
+
+    function parseM3U(m3uText) {
+      const lines = m3uText.split('\n');
+      const result = [];
+      let current = {};
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith('#EXTINF:')) {
+          const nameMatch = line.match(/,(.+)$/);
+          const logoMatch = line.match(/tvg-logo="([^"]+)"/);
+          const groupMatch = line.match(/group-title="([^"]+)"/);
+
+          current = {
+            name: nameMatch ? nameMatch[1].trim() : 'Unknown Channel',
+            logo: logoMatch ? logoMatch[1] : '',
+            group: groupMatch ? groupMatch[1].trim() : 'General'
+          };
+        } else if (line && !line.startsWith('#')) {
+          current.url = line;
+          result.push(current);
+          current = {};
+        }
+      }
+      return result;
+    }
+
+    // Horizontal Scrollable Category Pills
+    function renderCategoryPills() {
+      const categories = ['All', ...new Set(channels.map(c => c.group).filter(Boolean))].sort();
+      const container = document.getElementById('pills-container');
+      container.innerHTML = '';
+
+      categories.forEach(cat => {
+        const pill = document.createElement('div');
+        pill.className = `pill ${cat === selectedCategory ? 'active' : ''}`;
+        pill.innerText = cat;
+        pill.onclick = () => {
+          document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+          pill.classList.add('active');
+          selectedCategory = cat;
+          filterChannels();
+        };
+        container.appendChild(pill);
+      });
+    }
+
+    function filterChannels() {
+      const query = document.getElementById('search-input').value.toLowerCase();
+      const filtered = channels.filter(c => {
+        const matchesCategory = selectedCategory === 'All' || c.group === selectedCategory;
+        const matchesSearch = c.name.toLowerCase().includes(query);
+        return matchesCategory && matchesSearch;
+      });
+
+      renderChannels(filtered);
+    }
+
+    function renderChannels(list) {
+      const container = document.getElementById('channel-list');
+      container.innerHTML = '';
+
+      if (list.length === 0) {
+        container.innerHTML = '<div style="padding:20px; color:var(--text-secondary);">No channels found</div>';
+        return;
+      }
+
+      list.forEach(ch => {
+        const card = document.createElement('div');
+        card.className = 'channel-card';
+        card.onclick = () => playStream(ch, card);
+
+        const logoSrc = ch.logo || 'https://via.placeholder.com/44?text=TV';
+        card.innerHTML = `
+          <img class="channel-logo" src="${logoSrc}" onerror="this.src='https://via.placeholder.com/44?text=TV'" alt="" />
+          <div class="channel-meta">
+            <div class="channel-name">${ch.name}</div>
+            <div class="channel-tag">${ch.group}</div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function playStream(channel, element) {
+      document.querySelectorAll('.channel-card').forEach(el => el.classList.remove('active'));
+      element.classList.add('active');
+      
+      statusEl.innerHTML = `<span class="dot-live"></span> Playing: ${channel.name}`;
+      qualitySelect.style.display = 'none';
+
+      if (Hls.isSupported()) {
+        if (hls) hls.destroy();
+
+        // High-Speed Playback Buffer Optimizations
+        hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          backBufferLength: 30,          // Clears memory behind current time to save RAM
+          maxBufferLength: 60,           // Pre-fetches up to 60 seconds ahead to stop stuttering
+          maxMaxBufferLength: 120,       // Max buffer capacity on fast connections
+          maxBufferSize: 60 * 1000 * 1000, // 60MB max buffer allocation
+          liveSyncDurationCount: 3,      // Keeps stream close to live edge
+          liveMaxLatencyDurationCount: 10
+        });
+
+        hls.loadSource(channel.url);
+        hls.attachMedia(video);
+        
+        hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+          setupQualityLevels(data.levels);
+          video.play().catch(() => {});
+        });
+
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          if (data.fatal) {
+            statusEl.innerHTML = `<span class="dot-live" style="background:#ef4444; box-shadow:0 0 8px #ef4444"></span> Offline or Stream Blocked`;
+          }
+        });
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = channel.url;
+        video.play().catch(() => {});
+      }
+    }
+
+    function setupQualityLevels(levels) {
+      if (!levels || levels.length <= 1) {
+        qualitySelect.style.display = 'none';
+        return;
+      }
+
+      qualitySelect.innerHTML = '<option value="-1">Auto (Speed Adaptive)</option>';
+      levels.forEach((level, index) => {
+        const opt = document.createElement('option');
+        opt.value = index;
+        const label = level.height ? `${level.height}p` : `${Math.round(level.bitrate / 1000)} kbps`;
+        opt.innerText = label;
+        qualitySelect.appendChild(opt);
+      });
+
+      qualitySelect.style.display = 'block';
+    }
+
+    function changeQuality(levelIndex) {
+      if (hls) {
+        hls.currentLevel = parseInt(levelIndex);
+      }
+    }
+
+    loadPlaylist();
+  </script>
+</body>
+</html>
